@@ -19,6 +19,8 @@
 
 import face_recognition.api as face_recognition
 from flask import Flask, jsonify, request, redirect
+import json
+import numpy as np
 
 # You can change this to any folder on your system
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
@@ -124,13 +126,75 @@ def recognition_faces_in_image(knownfile_stream, detectfile_stream):
     
     if len(knownface_encodings) > 1:
         result = {
-            "ret": 1
+            "ret": 1,
+            "msg": "knownface has more than one face"
         }
         return jsonify(result)
     
     if not knownface_encodings or not detectface_encodings:
         result = {
-            "ret": 2
+            "ret": 2,
+            "msg": "knownface or detectface has no face"
+        }
+        return jsonify(result)
+    
+
+    checked_results = []
+    for detectface_encoding in detectface_encodings:
+        distances = face_recognition.face_distance(knownface_encodings, detectface_encoding)
+        checked_result = list(distances <= 0.6)
+        checked_results.append(distances.tolist())
+        
+        
+    # 讲识别结果以json键值对的数据结构输出
+    result = {
+        "ret": 0,
+        "results": checked_results
+    }
+    return jsonify(result)
+
+
+@app.route('/compare', methods=['POST'])
+def compare_image():
+    data = request.get_data()
+    if not data:
+        result =  {
+            "ret": 3,
+            "msg": "format error"
+        }
+        return jsonify(result)
+    j_data = json.loads(data)
+	
+    if "knownface" not in j_data or "detectface" not in j_data:
+        result =  {
+            "ret": 3,
+            "msg": "format error"
+        }
+        return jsonify(result)
+    
+    knownface = j_data['knownface']
+    detectface = j_data['detectface']
+	
+    return compare_faces_in_image(knownface, detectface)
+
+
+def compare_faces_in_image(knownface, detectface):
+    knownface_encodings = []
+    detectface_encodings = []
+	
+    knownface_encodings.append(np.array(knownface))
+    detectface_encodings.append(np.array(detectface))
+    if len(knownface_encodings) > 1:
+        result = {
+            "ret": 1,
+            "msg": "knownface has more than one face"
+        }
+        return jsonify(result)
+    
+    if not knownface_encodings or not detectface_encodings:
+        result = {
+            "ret": 2,
+            "msg": "knownface or detectface has no face"
         }
         return jsonify(result)
     
@@ -151,4 +215,5 @@ def recognition_faces_in_image(knownfile_stream, detectfile_stream):
 
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    app.run(host='127.0.0.1', port=5001, debug=True)
+	
